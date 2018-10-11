@@ -93,12 +93,12 @@ my($scriptName,$scriptPath,$scriptSuffix);
 
 BEGIN { ($scriptName,$scriptPath,$scriptSuffix) = fileparse($0, qr/\.[^.]*/); }
 
-my $APP_PATH;
+my $app_path;
 
 BEGIN {
     die "GRID_TO_CLIMDIVS must be set to a valid directory - please check your environment settings - exiting" unless(CheckENV('GRID_TO_CLIMDIVS'));
-    $APP_PATH   = $ENV{GRID_TO_CLIMDIVS};
-    $APP_PATH   = RemoveSlash($APP_PATH);
+    $app_path   = $ENV{GRID_TO_CLIMDIVS};
+    $app_path   = RemoveSlash($app_path);
 }
 
 # --- Get the command-line options ---
@@ -110,12 +110,12 @@ my $manual      = undef;
 
 GetOptions(
     'ctl|c=s'             => \$ctl,
-    'time|t=i'            => \$time,
+    'time|t=s'            => \$time,
     'help|h'              => \$help,
     'manual|man'          => \$manual,
 );
 
-# --- Respond to options -help or -manual if they are passed before doing anything else ---
+# --- Handle -help and -manual options if they are supplied ---
 
 if($help) {
 
@@ -137,6 +137,45 @@ if($manual) {
 
 }
 
+# --- Make sure the required options are supplied ---
+
+unless($ctl and $time and $output) {
+
+    pod2usage( {
+        -message => 'Options -ctl, -time, and -output are required to run this script',
+        -exitval => 1,
+        -verbose => 0,
+    } );
+
+}
+
+# --- Set up temporary file to hold regridded data ---
+
+unless(-d "$app_path/.temp") { mkpath("$app_path/.temp") or die "Could not create directory $app_path/.temp - check your permissions - exiting"; }
+my $temp_file = "$app_path/.temp/regridded-".int(rand(1000000));
+
+END {
+    if(-e $temp_file) { unlink($temp_file) or warn "Could not remove $temp_file"; }
+}
+
+# --- Regrid the data to 0.125 degree resolution using GrADS ---
+
+print "\nRegridding the input data using GrADS...\n";
+
+my $grads_script = "$app_path/scripts/regrid-input.gs";
+my $grads_err    = grads("run $grads_script $ctl $time $temp_file");
+
+if($grads_err) { die "\n$grads_err\n"; }
+
+# --- Open the temporary data file ---
+
+unless(open(INPUT, '<' ,$temp_file) { die "Could not open $temp_file for reading - check your permissions - exiting"; }
+binmode(INPUT);
+my $input = join('',<INPUT>);
+my @input = unpack('f*',$input);
+close(INPUT);
+
+# See /cpc/home/aallgood/sandboxes/ClimateDivisions/lib
 
 exit 0;
 
