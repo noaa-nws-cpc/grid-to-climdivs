@@ -4,39 +4,35 @@
 
 =head1 NAME
 
-grid-to-climdivs - Create climate divisions (344) data using gridded data and GrADS
+grid-to-climdivs - GrADS-based utility to create data on the 344 U.S. climate divisions from gridded data
 
 =head1 SYNOPSIS
 
- $GRID_TO_CLIMDIVS/scripts/grid-to-climdivs.pl [-c|-d|-u]
+ $GRID_TO_CLIMDIVS/scripts/grid-to-climdivs.pl [-c|-t|-o]
  $GRID_TO_CLIMDIVS/scripts/grid-to-climdivs.pl -h
  $GRID_TO_CLIMDIVS/scripts/grid-to-climdivs.pl -man
 
  [OPTION]              [DESCRIPTION]                                         [VALUES]
 
  -ctl, -c              GrADS formatted gridded data descriptor file          filename
- -date, -d             Valid date for grid (used as GrADS TDEF)              yyyymmdd
  -help, -h             Print usage message and exit
  -manual, -man         Display script documentation
- -output, -o           Output filename                                       filename
- -unit-conversion, -u  Unit conversion to apply to output:
-                          Convert Kelvin to degrees Fahrenheit               k,m
-                          Convert new = M*old                                M
-                          Convert new = M*old + N                            M,N
+ -output, -o           Climate divisions data output filename                filename
+ -time, -t             Time associated with the data (for GrADS TDEF)        hh:mmZddmmmyyyy - see http://cola.gmu.edu/grads/gadoc/descriptorfile.html#TDEF for more information
 
 =head1 DESCRIPTION
 
 =head2 PURPOSE
 
-This script:
+What this script does:
 
 =over 3
 
-=item * Takes an input data grid and regrids it to match a 0.125 degree map grid for which there are gridpoints in every climate division
+=item * Loads a data grid specified by a GrADS data descriptor (ctl) file and a TDEF specification into GrADS
 
-=item * Calculates climate divisional data by averaging the gridpoints that fall into each division
+=item * Regrids the data to 0.125 degree resolution in GrADS and dumps to a temporary file
 
-=item * Performs a unit conversion to the climate divisions data if specified
+=item * Opens the temporary file and calculates climate divisions data by averaging the gridpoints that fall into each division
 
 =item * Writes the results to an ASCII output file
 
@@ -60,7 +56,7 @@ The following environment variables are required to be set in order to run this 
 
 =over 3
 
-=item * GRID_TO_CLIMDIVS - The full path to where grid-to-climdivs is installed on your system
+=item * GRID_TO_CD - Full path to where grid-to-climdivs is installed on your system
 
 =back
 
@@ -70,7 +66,7 @@ L<Adam Allgood|mailto:Adam.Allgood@noaa.gov>
 
 L<Climate Prediction Center - NOAA/NWS/NCEP|http://www.cpc.ncep.noaa.gov>
 
-This documentation was last updated on: 20SEP2018
+This documentation was last updated on: 11OCT2018
 
 =cut
 
@@ -108,17 +104,15 @@ BEGIN {
 # --- Get the command-line options ---
 
 my $ctl         = undef;
-my $date        = undef;
+my $time        = undef;
 my $help        = undef;
 my $manual      = undef;
-my $unit_conv   = undef;
 
 GetOptions(
     'ctl|c=s'             => \$ctl,
-    'date|d=i'            => \$date,
+    'time|t=i'            => \$time,
     'help|h'              => \$help,
     'manual|man'          => \$manual,
-    'unit-conversion|u=s' => \$unit_conv,
 );
 
 # --- Respond to options -help or -manual if they are passed before doing anything else ---
@@ -143,12 +137,6 @@ if($manual) {
 
 }
 
-# --- Make sure --date option  was passed with a valid date ---
-
-my $day;
-eval   { $day = CPC::Day->new($date); };
-if($@) { die "Option --date=$date is invalid! Reason: $@ - exiting"; }
-unless(CPC::Day->new() >= $day - 1) { die "Option --date=$date is too recent - exiting"; }
 
 exit 0;
 
