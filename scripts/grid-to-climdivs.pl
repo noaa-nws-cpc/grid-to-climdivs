@@ -165,9 +165,10 @@ print "\nRegridding the input data using GrADS...\n";
 my $grads_script = "$app_path/scripts/regrid-input.gs";
 my $grads_err    = grads("run $grads_script $ctl $time $temp_file");
 
-if($grads_err) { die "\n$grads_err\n"; }
+if($grads_err)        { die "\n$grads_err\n"; }
+unless(-s $temp_file) { die "No GrADS errors found, but regridded data not created - exiting"; }
 
-# --- Open the temporary data file ---
+# --- Load gridded input data from the temporary file ---
 
 unless(open(INPUT, '<' ,$temp_file) { die "Could not open $temp_file for reading - check your permissions - exiting"; }
 binmode(INPUT);
@@ -175,7 +176,55 @@ my $input = join('',<INPUT>);
 my @input = unpack('f*',$input);
 close(INPUT);
 
-# See /cpc/home/aallgood/sandboxes/ClimateDivisions/lib
+# --- Load the gridpoint to climate divisions map data ---
+
+my $map_file = "$app_path/ref/Conus0.125DegreeGrid-ClimateDivisions.map";
+die "$map_file not found - your repository may be corrupted - exiting" unless(-s $map_file);
+unless(open(MAP, '<' ,$map_file) { die "Could not open $map_file for reading - check your permissions - exiting"; }
+my $header = <MAP>;
+my @map;
+
+while (<MAP>) {
+    my $line = $_;
+    chomp $line;
+    my($lon,$lat,$stcd) = split(/\|/,$line);
+    push(@map,$stcd);
+}
+
+close(MAP);
+
+# --- Make sure the input and data lists are the same size ---
+
+die "Input data and gridpoint to climate divisions map arrays are different sizes - exiting" if(@input != @map);
+
+# --- Compute the averages of the gridpoints that fall into each division ---
+
+my $sums   = CPC::Regions::ClimateDivisions->new();
+my $npts   = CPC::Regions::ClimateDivisions->new();
+my $output = CPC::Regions::ClimateDivisions->new();
+$sums->Initialize(0);
+$npts->Initialize(0);
+$sums->SetMissing(-9999);
+$npts->SetMissing(-9999);
+$output->SetMissing(-9999);
+
+GRIDPOINT: for(my $i=0; $i<@map; $i++) {
+    next GRIDPOINT unless($sums->Exists($map[$i]));
+
+    if(looks_like_number($input[$i]) and $input[$i] > -9999) {
+        $sums->SetData($map[$i],$sums->GetData($map[$i]) + $input[$i]);
+        $npts->SetData($map[$i],$npts->GetData($map[$i]) + 1);
+    }
+
+} # :GRIDPOINT
+
+$npts->SetMissing(0);
+$npts->SetMissing(-9999);
+$result = $sums / $npts;
+
+# --- Write out the climate divisions data ---
+
+
 
 exit 0;
 
